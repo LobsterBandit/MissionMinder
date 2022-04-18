@@ -1,0 +1,3 @@
+.vscode
+libs/*
+!libs/json.lua

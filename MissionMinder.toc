@@ -1,0 +1,12 @@
+## Interface: 90200
+## Title: MissionMinder
+## Author: Lobsterbandit
+## Notes: Track covenant adventure table missions both in-game and out
+## SavedVariables: MissionMinderDB
+## Version: @project-version@
+## DefaultState: Enabled
+
+embeds.xml
+
+base64.lua
+MissionMinder.lua

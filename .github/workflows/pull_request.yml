@@ -1,0 +1,40 @@
+name: CI-PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "README.md"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install and run Luacheck
+        uses: nebularg/actions-luacheck@v1
+        with:
+          args: "--no-color -q"
+          annotate: warning
+
+      - name: Create Package
+        uses: BigWigsMods/packager@master
+        with:
+          args: -d -z
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: MissionMinder-PR${{ github.event.number }}
+          path: .release/
+
+      - name: Send Status to Discord
+        uses: nebularg/actions-discord-webhook@v1
+        with:
+          webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: ${{ job.status }}
+        if: always()

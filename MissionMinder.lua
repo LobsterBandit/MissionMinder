@@ -3,6 +3,10 @@ MissionMinder = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "A
 MissionMinder.DatabaseName = "MissionMinderDB"
 
 local AceGUI = LibStub("AceGUI-3.0")
+local Base64 = LibStub("base64.lua")
+local JSON = LibStub("json.lua")
+local LibDeflate = LibStub("LibDeflate")
+
 -- database version
 local DB_VERSION = 1
 -- color of console output
@@ -24,6 +28,11 @@ local MissionMinderDB_defaults = {
                 Gender = nil, -- enum, need map table
                 LastSeen = nil, -- timestamp in seconds
                 Level = nil,
+                Missions = {
+                    ["*"] = {
+                        -- static mission info, rewards, etc
+                    }
+                },
                 Name = nil,
                 PlayedLevel = 0, -- in seconds
                 PlayedTotal = 0, -- in seconds
@@ -38,6 +47,16 @@ local MissionMinderDB_defaults = {
         }
     }
 }
+
+------------------------------------
+-- Helpers
+------------------------------------
+
+local function compressAndEncode(data)
+    local jsonData = JSON.encode(data)
+    local compressed = LibDeflate:CompressZlib(jsonData)
+    return Base64:encode(compressed)
+end
 
 ------------------------------------
 -- Event Handlers
@@ -83,17 +102,6 @@ function MissionMinder:UpdateCharacterMetadata()
     char.LastSeen = time()
 end
 
-function MissionMinder:PrintCharacterMetadata()
-    self:PrintMessage("Key >> %s", self.Character.Key)
-    self:PrintMessage("Realm >> %s", self.Character.Realm)
-    self:PrintMessage("Name >> %s", self.Character.Name)
-    self:PrintMessage("Class >> %s", self.Character.Class)
-    self:PrintMessage("Race >> %s", self.Character.Race)
-    self:PrintMessage("Gender >> %s", self.Character.Gender)
-    self:PrintMessage("Level >> %s", self.Character.Level)
-    self:PrintMessage("LastSeen >> %s", self.Character.LastSeen)
-end
-
 function MissionMinder:PrintMessage(...)
     self:Print("|c" .. CHAT_COLOR .. format(...) .. "|r")
 end
@@ -114,11 +122,6 @@ function MissionMinder:PrintUsage()
 end
 
 function MissionMinder:ShowExportString()
-    local json = LibStub("json.lua")
-    local base64 = LibStub("base64.lua")
-    local data = json:encode(self.db.global.Characters)
-    local printable = base64:encode(data)
-
     local frame = AceGUI:Create("Frame")
     frame:SetTitle("MissionMinder Character Export")
     frame:SetStatusText("Exporting MissionMinder Character Data")
@@ -133,7 +136,7 @@ function MissionMinder:ShowExportString()
     local editBox = AceGUI:Create("MultiLineEditBox")
     editBox:DisableButton(true)
     editBox:SetLabel(nil)
-    editBox:SetText(printable)
+    editBox:SetText(compressAndEncode(self.db.global))
     editBox:SetFocus()
     editBox:HighlightText()
 
@@ -169,18 +172,23 @@ function MissionMinder:MissionMinderSlashHandler(input)
 
     local command = self:GetArgs(input, 1)
 
+    if command == nil then
+        self:ShowExportString()
+        return
+    end
+
     if command == "version" then
         self:PrintVersion()
         return
     end
 
-    if command == "char" then
-        self:PrintCharacterMetadata()
+    if command == "export" then
+        self:ShowExportString()
         return
     end
 
-    if command == "export" then
-        self:ShowExportString()
+    if command == "help" then
+        self:PrintUsage()
         return
     end
 
@@ -203,13 +211,13 @@ function MissionMinder:OnInitialize()
 
     self:SetCurrentCharacter()
     self:RegisterChatCommand("missionminder", "MissionMinderSlashHandler")
+    self:RegisterChatCommand("mm", "MissionMinderSlashHandler")
 end
 
 function MissionMinder:OnEnable()
     self:PrintVersion()
 
     self:UpdateCharacterMetadata()
-    self:PrintCharacterMetadata()
 
     self:RegisterEvent("PLAYER_LOGOUT", OnPlayerLogout)
     self:RegisterEvent("TIME_PLAYED_MSG", OnTimePlayedMsg)
@@ -220,7 +228,6 @@ end
 function MissionMinder:OnDisable()
     self:UnregisterEvent("PLAYER_LOGOUT")
     self:UnregisterEvent("TIME_PLAYED_MSG")
-    self:UnregisterEvent("PLAYER_LEVEL_UP")
-    self:UnregisterEvent("PLAYER_XP_UPDATE")
     self:UnregisterChatCommand("missionminder")
+    self:UnregisterChatCommand("mm")
 end

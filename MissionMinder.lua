@@ -63,12 +63,19 @@ end
 
 local function getActiveMissions()
     local missions = {}
+    local missionsStartTimes = DataStore:GetCharacterTable("DataStore_Garrisons").MissionsStartTimes
     local char = DataStore:GetCharacter()
     local activeMissions = DataStore:GetActiveMissions(char, SL_MISSIONS)
     for _, id in pairs(activeMissions) do
-        local mission = DataStore:GetMissionInfo(id)
         -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
-        missions[tostring(id)] = mission
+        local missionKey = tostring(id)
+        local mission = DataStore:GetMissionInfo(id)
+        local followers, remainingTime, successChance = DataStore:GetActiveMissionInfo(char, id)
+        mission.startTime = missionsStartTimes[id]
+        mission.followers = followers
+        mission.remainingTime = remainingTime
+        mission.successChance = successChance
+        missions[missionKey] = mission
     end
     return missions
 end

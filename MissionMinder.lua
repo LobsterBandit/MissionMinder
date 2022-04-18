@@ -31,7 +31,12 @@ local MissionMinderDB_defaults = {
                 Gender = nil, -- enum, need map table
                 LastSeen = nil, -- timestamp in seconds
                 Level = nil,
-                Missions = {
+                MissionsActive = {
+                    ["*"] = {
+                        -- mission info, rewards, etc
+                    }
+                },
+                MissionsAvailable = {
                     ["*"] = {
                         -- mission info, rewards, etc
                     }
@@ -56,11 +61,23 @@ local function compressAndEncode(data)
     return Base64:encode(compressed)
 end
 
-local function getMissions()
+local function getActiveMissions()
     local missions = {}
     local char = DataStore:GetCharacter()
     local activeMissions = DataStore:GetActiveMissions(char, SL_MISSIONS)
     for _, id in pairs(activeMissions) do
+        local mission = DataStore:GetMissionInfo(id)
+        -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
+        missions[tostring(id)] = mission
+    end
+    return missions
+end
+
+local function getAvailableMissions()
+    local missions = {}
+    local char = DataStore:GetCharacter()
+    local availableMissions = DataStore:GetAvailableMissions(char, SL_MISSIONS)
+    for _, id in pairs(availableMissions) do
         local mission = DataStore:GetMissionInfo(id)
         -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
         missions[tostring(id)] = mission
@@ -92,7 +109,7 @@ function MissionMinder:SetCurrentCharacter()
     local account = "Default"
     local realm = GetRealmName()
     local char = UnitName("player")
-    local key = format("%s:%s:%s", account, realm, char)
+    local key = format("%s.%s.%s", account, realm, char)
 
     if self.db.global.Characters[key].Key == nil then
         self.db.global.Characters[key].Key = key
@@ -155,7 +172,8 @@ end
 
 function MissionMinder:UpdateMissions()
     local char = self.Character
-    char.Missions = getMissions()
+    char.MissionsActive = getActiveMissions()
+    char.MissionsAvailable = getAvailableMissions()
 end
 
 function MissionMinder:UpgradeDB()

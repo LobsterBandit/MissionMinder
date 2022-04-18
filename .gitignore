@@ -1,3 +1,4 @@
 .vscode
 libs/*
+!libs/base64.lua
 !libs/json.lua

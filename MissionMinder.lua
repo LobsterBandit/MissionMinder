@@ -6,11 +6,14 @@ local AceGUI = LibStub("AceGUI-3.0")
 local Base64 = LibStub("base64.lua")
 local JSON = LibStub("json.lua")
 local LibDeflate = LibStub("LibDeflate")
+local DataStore = _G["DataStore"]
 
 -- database version
 local DB_VERSION = 1
 -- color of console output
 local CHAT_COLOR = "ff82bf4c"
+-- convenant adventure table follower
+local SL_MISSIONS = Enum.GarrisonFollowerType.FollowerType_9_0
 
 -- convert integer returned from UnitSex() to description
 local GenderMap = {
@@ -28,9 +31,14 @@ local MissionMinderDB_defaults = {
                 Gender = nil, -- enum, need map table
                 LastSeen = nil, -- timestamp in seconds
                 Level = nil,
-                Missions = {
+                MissionsActive = {
                     ["*"] = {
-                        -- static mission info, rewards, etc
+                        -- mission info, rewards, etc
+                    }
+                },
+                MissionsAvailable = {
+                    ["*"] = {
+                        -- mission info, rewards, etc
                     }
                 },
                 Name = nil,
@@ -38,11 +46,6 @@ local MissionMinderDB_defaults = {
                 PlayedTotal = 0, -- in seconds
                 Race = nil,
                 Realm = nil,
-            }
-        },
-        Missions = {
-            ["*"] = {
-                -- static mission info, rewards, etc
             }
         }
     }
@@ -56,6 +59,37 @@ local function compressAndEncode(data)
     local jsonData = JSON.encode(data)
     local compressed = LibDeflate:CompressZlib(jsonData)
     return Base64:encode(compressed)
+end
+
+local function getActiveMissions()
+    local missions = {}
+    local missionsStartTimes = DataStore:GetCharacterTable("DataStore_Garrisons").MissionsStartTimes
+    local char = DataStore:GetCharacter()
+    local activeMissions = DataStore:GetActiveMissions(char, SL_MISSIONS)
+    for _, id in pairs(activeMissions) do
+        -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
+        local missionKey = tostring(id)
+        local mission = DataStore:GetMissionInfo(id)
+        local followers, remainingTime, successChance = DataStore:GetActiveMissionInfo(char, id)
+        mission.startTime = missionsStartTimes[id]
+        mission.followers = followers
+        mission.remainingTime = remainingTime
+        mission.successChance = successChance
+        missions[missionKey] = mission
+    end
+    return missions
+end
+
+local function getAvailableMissions()
+    local missions = {}
+    local char = DataStore:GetCharacter()
+    local availableMissions = DataStore:GetAvailableMissions(char, SL_MISSIONS)
+    for _, id in pairs(availableMissions) do
+        local mission = DataStore:GetMissionInfo(id)
+        -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
+        missions[tostring(id)] = mission
+    end
+    return missions
 end
 
 ------------------------------------
@@ -82,7 +116,7 @@ function MissionMinder:SetCurrentCharacter()
     local account = "Default"
     local realm = GetRealmName()
     local char = UnitName("player")
-    local key = format("%s:%s:%s", account, realm, char)
+    local key = format("%s.%s.%s", account, realm, char)
 
     if self.db.global.Characters[key].Key == nil then
         self.db.global.Characters[key].Key = key
@@ -141,6 +175,12 @@ function MissionMinder:ShowExportString()
     editBox:HighlightText()
 
     frame:AddChild(editBox)
+end
+
+function MissionMinder:UpdateMissions()
+    local char = self.Character
+    char.MissionsActive = getActiveMissions()
+    char.MissionsAvailable = getAvailableMissions()
 end
 
 function MissionMinder:UpgradeDB()
@@ -218,6 +258,7 @@ function MissionMinder:OnEnable()
     self:PrintVersion()
 
     self:UpdateCharacterMetadata()
+    self:UpdateMissions()
 
     self:RegisterEvent("PLAYER_LOGOUT", OnPlayerLogout)
     self:RegisterEvent("TIME_PLAYED_MSG", OnTimePlayedMsg)

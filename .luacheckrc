@@ -12,6 +12,7 @@ globals = {
 	"gsub",
 	"time",
 	-- WoW APIs
+	"Enum",
 	"GetAddOnMetadata",
 	"GetRealmName",
 	"RequestTimePlayed",

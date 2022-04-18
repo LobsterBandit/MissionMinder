@@ -4,6 +4,7 @@
 ## Notes: Track covenant adventure table missions both in-game and out
 ## SavedVariables: MissionMinderDB
 ## Version: @project-version@
+## Dependencies: DataStore
 ## DefaultState: Enabled
 
 embeds.xml

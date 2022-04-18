@@ -6,11 +6,14 @@ local AceGUI = LibStub("AceGUI-3.0")
 local Base64 = LibStub("base64.lua")
 local JSON = LibStub("json.lua")
 local LibDeflate = LibStub("LibDeflate")
+local DataStore = _G["DataStore"]
 
 -- database version
 local DB_VERSION = 1
 -- color of console output
 local CHAT_COLOR = "ff82bf4c"
+-- convenant adventure table follower
+local SL_MISSIONS = Enum.GarrisonFollowerType.FollowerType_9_0
 
 -- convert integer returned from UnitSex() to description
 local GenderMap = {
@@ -30,7 +33,7 @@ local MissionMinderDB_defaults = {
                 Level = nil,
                 Missions = {
                     ["*"] = {
-                        -- static mission info, rewards, etc
+                        -- mission info, rewards, etc
                     }
                 },
                 Name = nil,
@@ -38,11 +41,6 @@ local MissionMinderDB_defaults = {
                 PlayedTotal = 0, -- in seconds
                 Race = nil,
                 Realm = nil,
-            }
-        },
-        Missions = {
-            ["*"] = {
-                -- static mission info, rewards, etc
             }
         }
     }
@@ -56,6 +54,18 @@ local function compressAndEncode(data)
     local jsonData = JSON.encode(data)
     local compressed = LibDeflate:CompressZlib(jsonData)
     return Base64:encode(compressed)
+end
+
+local function getMissions()
+    local missions = {}
+    local char = DataStore:GetCharacter()
+    local activeMissions = DataStore:GetActiveMissions(char, SL_MISSIONS)
+    for _, id in pairs(activeMissions) do
+        local mission = DataStore:GetMissionInfo(id)
+        -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
+        missions[tostring(id)] = mission
+    end
+    return missions
 end
 
 ------------------------------------
@@ -143,6 +153,11 @@ function MissionMinder:ShowExportString()
     frame:AddChild(editBox)
 end
 
+function MissionMinder:UpdateMissions()
+    local char = self.Character
+    char.Missions = getMissions()
+end
+
 function MissionMinder:UpgradeDB()
     local dbVersion = self.db.global.DBVersion or 1
 
@@ -218,6 +233,7 @@ function MissionMinder:OnEnable()
     self:PrintVersion()
 
     self:UpdateCharacterMetadata()
+    self:UpdateMissions()
 
     self:RegisterEvent("PLAYER_LOGOUT", OnPlayerLogout)
     self:RegisterEvent("TIME_PLAYED_MSG", OnTimePlayedMsg)

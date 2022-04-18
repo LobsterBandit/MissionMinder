@@ -115,7 +115,8 @@ end
 
 function MissionMinder:ShowExportString()
     local json = LibStub("json.lua")
-    local data = json.encode(self.db.global.Characters)
+    local base64 = LibStub("base64.lua")
+    local data = json:encode(self.db.global.Characters)
     local printable = base64:encode(data)
 
     local frame = AceGUI:Create("Frame")

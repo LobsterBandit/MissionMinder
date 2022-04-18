@@ -1,7 +1,10 @@
+local MAJOR, MINOR = "base64.lua", 1
+local base64, _ = LibStub:NewLibrary(MAJOR, MINOR)
+base64._version = "0.1.0"
+
 ------------------------------------
 -- base64 encode/decode functions
 ------------------------------------
-base64 = {}
 -- character table string
 base64.b = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
@@ -31,7 +34,7 @@ function base64:encode(data)
 end
 
 function base64:decode(data)
-    data = gsub(data, "[^" .. self.b .. "=]", "")
+    data = string.gsub(data, "[^" .. self.b .. "=]", "")
     return (data:gsub(
         ".",
         function(x)

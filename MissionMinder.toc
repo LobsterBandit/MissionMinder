@@ -8,5 +8,4 @@
 
 embeds.xml
 
-base64.lua
 MissionMinder.lua

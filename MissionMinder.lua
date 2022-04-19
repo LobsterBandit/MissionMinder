@@ -1,6 +1,7 @@
 local addonName = ...
 MissionMinder = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
 MissionMinder.DatabaseName = "MissionMinderDB"
+MissionMinder.ExportDatabaseName = "MissionMinderExportDB"
 
 local AceGUI = LibStub("AceGUI-3.0")
 local Base64 = LibStub("base64.lua")
@@ -47,7 +48,13 @@ local MissionMinderDB_defaults = {
                 Race = nil,
                 Realm = nil,
             }
-        }
+        },
+    }
+}
+
+local MissionMinderExportDB_defaults = {
+    global = {
+        export = "",
     }
 }
 
@@ -106,6 +113,8 @@ end
 
 local function OnPlayerLogout()
     MissionMinder.Character.LastSeen = time()
+
+    MissionMinder.db_export.global.export = compressAndEncode(MissionMinder.db.global)
 end
 
 ------------------------------------
@@ -246,8 +255,11 @@ end
 
 function MissionMinder:OnInitialize()
     self.Version = "v" .. GetAddOnMetadata("MissionMinder", "Version")
+    --
     self.db = LibStub("AceDB-3.0"):New(self.DatabaseName, MissionMinderDB_defaults, true)
     self:UpgradeDB()
+
+    self.db_export = LibStub("AceDB-3.0"):New(self.ExportDatabaseName, MissionMinderExportDB_defaults, true)
 
     self:SetCurrentCharacter()
     self:RegisterChatCommand("missionminder", "MissionMinderSlashHandler")

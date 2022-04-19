@@ -2,7 +2,7 @@
 ## Title: MissionMinder
 ## Author: Lobsterbandit
 ## Notes: Track covenant adventure table missions both in-game and out
-## SavedVariables: MissionMinderDB
+## SavedVariables: MissionMinderDB, MissionMinderExportDB
 ## Version: @project-version@
 ## Dependencies: DataStore
 ## DefaultState: Enabled

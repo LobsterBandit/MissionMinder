@@ -1,10 +1,10 @@
 ## Interface: 90200
 ## Title: MissionMinder
 ## Author: Lobsterbandit
-## Notes: Track covenant adventure table missions both in-game and out
+## Notes: Track covenant adventure table missions in-game and out
 ## SavedVariables: MissionMinderDB, MissionMinderExportDB
 ## Version: @project-version@
-## Dependencies: DataStore
+## Dependencies: InProgressMissions
 ## DefaultState: Enabled
 
 embeds.xml

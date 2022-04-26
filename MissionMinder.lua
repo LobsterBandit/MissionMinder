@@ -7,7 +7,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 local Base64 = LibStub("base64.lua")
 local JSON = LibStub("json.lua")
 local LibDeflate = LibStub("LibDeflate")
-local DataStore = _G["DataStore"]
+local IPMDB = _G["IPMDB"]
 
 -- database version
 local DB_VERSION = 1
@@ -32,16 +32,6 @@ local MissionMinderDB_defaults = {
                 Gender = nil, -- enum, need map table
                 LastSeen = nil, -- timestamp in seconds
                 Level = nil,
-                MissionsActive = {
-                    ["*"] = {
-                        -- mission info, rewards, etc
-                    }
-                },
-                MissionsAvailable = {
-                    ["*"] = {
-                        -- mission info, rewards, etc
-                    }
-                },
                 Name = nil,
                 PlayedLevel = 0, -- in seconds
                 PlayedTotal = 0, -- in seconds
@@ -49,6 +39,7 @@ local MissionMinderDB_defaults = {
                 Realm = nil,
             }
         },
+        Missions = {}
     }
 }
 
@@ -68,37 +59,6 @@ local function compressAndEncode(data)
     return Base64:encode(compressed)
 end
 
-local function getActiveMissions()
-    local missions = {}
-    local missionsStartTimes = DataStore:GetCharacterTable("DataStore_Garrisons").MissionsStartTimes
-    local char = DataStore:GetCharacter()
-    local activeMissions = DataStore:GetActiveMissions(char, SL_MISSIONS)
-    for _, id in pairs(activeMissions) do
-        -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
-        local missionKey = tostring(id)
-        local mission = DataStore:GetMissionInfo(id)
-        local followers, remainingTime, successChance = DataStore:GetActiveMissionInfo(char, id)
-        mission.startTime = missionsStartTimes[id]
-        mission.followers = followers
-        mission.remainingTime = remainingTime
-        mission.successChance = successChance
-        missions[missionKey] = mission
-    end
-    return missions
-end
-
-local function getAvailableMissions()
-    local missions = {}
-    local char = DataStore:GetCharacter()
-    local availableMissions = DataStore:GetAvailableMissions(char, SL_MISSIONS)
-    for _, id in pairs(availableMissions) do
-        local mission = DataStore:GetMissionInfo(id)
-        -- stringify id for use as key: https://github.com/rxi/json.lua/issues/17
-        missions[tostring(id)] = mission
-    end
-    return missions
-end
-
 ------------------------------------
 -- Event Handlers
 ------------------------------------
@@ -112,6 +72,7 @@ local function OnTimePlayedMsg(_, totalTime, currentLevelTime)
 end
 
 local function OnPlayerLogout()
+    MissionMinder:UpdateMissions()
     MissionMinder.Character.LastSeen = time()
 
     MissionMinder.db_export.global.export = compressAndEncode(MissionMinder.db.global)
@@ -157,10 +118,9 @@ function MissionMinder:PrintUsage()
     self:PrintMessage("------------------------------------")
     self:PrintVersion()
     self:Print()
-    self:PrintMessage("  /mm         - print this usage info")
+    self:PrintMessage("  /mm         - alias for /mm export")
     self:PrintMessage("  /mm version - print version info")
-    self:PrintMessage("  /mm char    - print character data")
-    self:PrintMessage("  /mm export  - export character data")
+    self:PrintMessage("  /mm export  - open export dialog")
     self:PrintMessage("------------------------------------")
 end
 
@@ -187,9 +147,7 @@ function MissionMinder:ShowExportString()
 end
 
 function MissionMinder:UpdateMissions()
-    local char = self.Character
-    char.MissionsActive = getActiveMissions()
-    char.MissionsAvailable = getAvailableMissions()
+    self.db.global.Missions = IPMDB.profiles
 end
 
 function MissionMinder:UpgradeDB()

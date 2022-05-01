@@ -11,6 +11,8 @@ globals = {
 	"format",
 	"gsub",
 	"time",
+	"tinsert",
+	"wipe",
 	-- WoW APIs
 	"Enum",
 	"GetAddOnMetadata",

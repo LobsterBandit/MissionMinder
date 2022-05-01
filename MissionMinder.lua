@@ -131,8 +131,8 @@ function MissionMinder:ShowExportString()
     frame:SetCallback(
         "OnClose",
         function(widget)
-            AceGUI:Release(widget)
-        end
+        AceGUI:Release(widget)
+    end
     )
     frame:SetLayout("Fill")
 
@@ -147,7 +147,47 @@ function MissionMinder:ShowExportString()
 end
 
 function MissionMinder:UpdateMissions()
-    self.db.global.Missions = IPMDB.profiles
+    self.db.global.Missions = wipe(self.db.global.Missions or {})
+    for name, missions in pairs(IPMDB.profiles) do
+        self.db.global.Missions[name] = {}
+        for _, mission in ipairs(missions) do
+            local tmp = {}
+            tmp.baseCost = mission.baseCost
+            tmp.cost = mission.cost
+            tmp.inProgress = mission.inProgress
+            tmp.xp = mission.xp
+            tmp.missionEndTime = mission.missionEndTime
+            tmp.missionID = mission.missionID
+            tmp.followerTypeID = mission.followerTypeID
+            tmp.durationSeconds = mission.durationSeconds
+            tmp.missionScalar = mission.missionScalar
+            tmp.charText = mission.charText
+            tmp.type = mission.type
+            tmp.rewards = mission.rewards
+            tmp.costCurrencyTypesID = mission.costCurrencyTypesID
+            tmp.name = mission.name
+            tmp.encounterIconInfo = mission.encounterIconInfo
+
+            -- follower info
+            tmp.followers = mission.followers
+            tmp.followerInfo = {}
+            for id, finfo in pairs(mission.followerInfo) do
+                tmp.followerInfo[id] = {}
+                tmp.followerInfo[id].followerTypeID = finfo.followerTypeID
+                tmp.followerInfo[id].level = finfo.level
+                tmp.followerInfo[id].levelXP = finfo.levelXP
+                tmp.followerInfo[id].isSoulbind = finfo.isSoulbind
+                tmp.followerInfo[id].name = finfo.name
+                tmp.followerInfo[id].xp = finfo.xp
+                tmp.followerInfo[id].health = finfo.health
+                tmp.followerInfo[id].maxHealth = finfo.maxHealth
+                tmp.followerInfo[id].isAutoTroop = finfo.isAutoTroop
+                tmp.followerInfo[id].role = finfo.role
+            end
+
+            tinsert(self.db.global.Missions[name], tmp)
+        end
+    end
 end
 
 function MissionMinder:UpgradeDB()

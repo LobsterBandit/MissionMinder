@@ -14,7 +14,7 @@ local DB_VERSION = 1
 -- color of console output
 local CHAT_COLOR = "ff82bf4c"
 -- convenant adventure table follower
-local SL_MISSIONS = Enum.GarrisonFollowerType.FollowerType_9_0
+-- local SL_MISSIONS = Enum.GarrisonFollowerType.FollowerType_9_0
 
 -- convert integer returned from UnitSex() to description
 local GenderMap = {

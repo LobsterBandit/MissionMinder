@@ -1,7 +1,8 @@
 local addonName = ...
-MissionMinder = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0")
-MissionMinder.DatabaseName = "MissionMinderDB"
-MissionMinder.ExportDatabaseName = "MissionMinderExportDB"
+MissionMinder = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceBucket-3.0", "AceConsole-3.0", "AceEvent-3.0")
+MissionMinder.DBName = "MMDB"
+MissionMinder.ExportDBName = "MMExportDB"
+MissionMinder.HistoryDBName = "MMHistoryDB"
 
 local AceGUI = LibStub("AceGUI-3.0")
 local Base64 = LibStub("base64.lua")
@@ -9,12 +10,25 @@ local JSON = LibStub("json.lua")
 local LibDeflate = LibStub("LibDeflate")
 local IPMDB = _G["IPMDB"]
 
+-- Lua API
+local tostring = tostring
+local tinsert = tinsert
+
+-- WoW API
+-- local C_Covenants_GetActiveCovenantID = C_Covenants.GetActiveCovenantID
+local C_CurrencyInfo_GetCurrencyInfo = C_CurrencyInfo.GetCurrencyInfo
+-- local C_Garrison = C_Garrison
+local GetMoney = GetMoney
+local GetCoinText = GetCoinText
+local tContains = tContains
+
 -- database version
 local DB_VERSION = 1
 -- color of console output
 local CHAT_COLOR = "ff82bf4c"
 -- convenant adventure table follower
--- local SL_MISSIONS = Enum.GarrisonFollowerType.FollowerType_9_0
+local SHADOWLANDS_FOLLOWER = Enum.GarrisonFollowerType.FollowerType_9_0
+local TRACKED_TABLES = { SHADOWLANDS_FOLLOWER }
 
 -- convert integer returned from UnitSex() to description
 local GenderMap = {
@@ -23,7 +37,7 @@ local GenderMap = {
     [3] = "Female"
 }
 
-local MissionMinderDB_defaults = {
+local MMDB_defaults = {
     global = {
         Characters = {
             ["*"] = {
@@ -32,22 +46,69 @@ local MissionMinderDB_defaults = {
                 Gender = nil, -- enum, need map table
                 LastSeen = nil, -- timestamp in seconds
                 Level = nil,
+                Money = 0,
+                MoneyText = "",
                 Name = nil,
                 PlayedLevel = 0, -- in seconds
                 PlayedTotal = 0, -- in seconds
                 Race = nil,
                 Realm = nil,
-            }
-        },
+                ReservoirAnima = 0,
+
+                AdventureTables = {
+                    ["*"] = {
+                        Type = nil,
+                        Followers = {}, -- list of non-auto companions
         Missions = {}
+                    }
+                }
+            }
+        }
     }
 }
 
-local MissionMinderExportDB_defaults = {
+local MExportDB_defaults = {
     global = {
         export = "",
     }
 }
+
+local MMHistoryDB_defaults = {
+    global = {
+        Characters = {
+            ["*"] = {
+                Key = nil,
+                AdventureTables = {
+                    ["*"] = {
+                        Type = nil,
+                        Missions = {}
+                    }
+                }
+            }
+        },
+        Data = {
+            ["*"] = {}
+        }
+    }
+}
+
+-- local currency = {
+--     -- Shadowlands
+--     1191, -- Valor
+--     1602, -- Conquest
+--     1792, -- Honor
+--     1822, -- Renown
+--     1767, -- Stygia
+--     1828, -- Soul Ash
+--     1810, -- Redeemed Soul
+--     1813, -- Reservoir Anima
+--     1889, -- Adventure Campaign Progress
+--     1904, -- Tower Knowledge
+--     1906, -- Soul Cinders
+--     1931, -- Cataloged Research
+--     1979, -- Cyphers of the First Ones
+--     2009, -- Cosmic Flux
+-- }
 
 ------------------------------------
 -- Helpers
@@ -57,6 +118,10 @@ local function compressAndEncode(data)
     local jsonData = JSON.encode(data)
     local compressed = LibDeflate:CompressZlib(jsonData)
     return Base64:encode(compressed)
+end
+
+local function missionKey(char)
+    return format("%s-%s", char.Name, char.Realm)
 end
 
 ------------------------------------
@@ -78,6 +143,19 @@ local function OnPlayerLogout()
     MissionMinder.db_export.global.export = compressAndEncode(MissionMinder.db.global)
 end
 
+local function UpdateCurrency()
+    local char = MissionMinder.Character
+    -- gold
+    char.Money = GetMoney()
+    char.MoneyText = GetCoinText(char.Money)
+
+    -- anima
+    local data = C_CurrencyInfo_GetCurrencyInfo(1813)
+    if data.discovered then
+        char.ReservoirAnima = data.quantity
+    end
+end
+
 ------------------------------------
 -- Mixins
 ------------------------------------
@@ -88,8 +166,14 @@ function MissionMinder:SetCurrentCharacter()
     local char = UnitName("player")
     local key = format("%s.%s.%s", account, realm, char)
 
+    -- main db char
     if self.db.global.Characters[key].Key == nil then
         self.db.global.Characters[key].Key = key
+    end
+
+    -- history db char
+    if self.db_history.global.Characters[key].Key == nil then
+        self.db_history.global.Characters[key].Key = key
     end
 
     self.Character = self.db.global.Characters[key]
@@ -146,46 +230,63 @@ function MissionMinder:ShowExportString()
     frame:AddChild(editBox)
 end
 
+-- Updates mission and follower data for the current character. Alt data will be gathered as each character logs in.
 function MissionMinder:UpdateMissions()
-    self.db.global.Missions = wipe(self.db.global.Missions or {})
-    for name, missions in pairs(IPMDB.profiles) do
-        self.db.global.Missions[name] = {}
+    local char = self.Character
+    for _, t in ipairs(TRACKED_TABLES) do
+        local charTable = char.AdventureTables[tostring(t)]
+        charTable.Type = charTable.Type or t
+        -- charTable.Followers = charTable.Followers or {}
+        -- wipe missions before fetching new
+        charTable.Missions = wipe(charTable.Missions or {})
+    end
+
+    local missions = IPMDB.profiles[missionKey(char)] or {}
         for _, mission in ipairs(missions) do
+        if tContains(TRACKED_TABLES, mission.followerTypeID) then
+            local tableType = tostring(mission.followerTypeID)
+            local charTable = char.AdventureTables[tableType]
             local tmp = {}
             tmp.baseCost = mission.baseCost
+            tmp.charText = mission.charText
             tmp.cost = mission.cost
+            tmp.costCurrencyTypesID = mission.costCurrencyTypesID
+            tmp.durationSeconds = mission.durationSeconds
+            tmp.encounterIconInfo = mission.encounterIconInfo
+            tmp.followers = mission.followers
+            tmp.followerInfo = mission.followerInfo
+            tmp.followerTypeID = mission.followerTypeID
             tmp.inProgress = mission.inProgress
-            tmp.xp = mission.xp
             tmp.missionEndTime = mission.missionEndTime
             tmp.missionID = mission.missionID
-            tmp.followerTypeID = mission.followerTypeID
-            tmp.durationSeconds = mission.durationSeconds
             tmp.missionScalar = mission.missionScalar
-            tmp.charText = mission.charText
-            tmp.type = mission.type
-            tmp.rewards = mission.rewards
-            tmp.costCurrencyTypesID = mission.costCurrencyTypesID
             tmp.name = mission.name
-            tmp.encounterIconInfo = mission.encounterIconInfo
+            tmp.rewards = mission.rewards
+            tmp.type = mission.type
+            tmp.xp = mission.xp
 
-            -- follower info
-            tmp.followers = mission.followers
-            tmp.followerInfo = {}
+            -- keep running list of unique followers
             for id, finfo in pairs(mission.followerInfo) do
-                tmp.followerInfo[id] = {}
-                tmp.followerInfo[id].followerTypeID = finfo.followerTypeID
-                tmp.followerInfo[id].level = finfo.level
-                tmp.followerInfo[id].levelXP = finfo.levelXP
-                tmp.followerInfo[id].isSoulbind = finfo.isSoulbind
-                tmp.followerInfo[id].name = finfo.name
-                tmp.followerInfo[id].xp = finfo.xp
-                tmp.followerInfo[id].health = finfo.health
-                tmp.followerInfo[id].maxHealth = finfo.maxHealth
-                tmp.followerInfo[id].isAutoTroop = finfo.isAutoTroop
-                tmp.followerInfo[id].role = finfo.role
+                if not charTable.Followers[id] then
+                    charTable.Followers[id] = {}
+                end
+
+                local followerInfo = {}
+                followerInfo.followerTypeID = finfo.followerTypeID
+                followerInfo.health = finfo.health
+                followerInfo.isAutoTroop = finfo.isAutoTroop
+                followerInfo.isSoulbind = finfo.isSoulbind
+                followerInfo.level = finfo.level
+                followerInfo.levelXP = finfo.levelXP
+                followerInfo.maxHealth = finfo.maxHealth
+                followerInfo.name = finfo.name
+                followerInfo.role = finfo.role
+                followerInfo.xp = finfo.xp
+
+                charTable.Followers[id] = followerInfo
             end
 
-            tinsert(self.db.global.Missions[name], tmp)
+            tinsert(charTable.Missions, tmp)
         end
     end
 end
@@ -253,11 +354,13 @@ end
 
 function MissionMinder:OnInitialize()
     self.Version = "v" .. GetAddOnMetadata("MissionMinder", "Version")
-    --
-    self.db = LibStub("AceDB-3.0"):New(self.DatabaseName, MissionMinderDB_defaults, true)
+
+    self.db = LibStub("AceDB-3.0"):New(self.DBName, MMDB_defaults, true)
     self:UpgradeDB()
 
-    self.db_export = LibStub("AceDB-3.0"):New(self.ExportDatabaseName, MissionMinderExportDB_defaults, true)
+    -- TODO: move these to separate addons for slimmer saved variables files
+    self.db_export = LibStub("AceDB-3.0"):New(self.ExportDBName, MExportDB_defaults, true)
+    self.db_history = LibStub("AceDB-3.0"):New(self.HistoryDBName, MMHistoryDB_defaults, true)
 
     self:SetCurrentCharacter()
     self:RegisterChatCommand("missionminder", "MissionMinderSlashHandler")
@@ -270,6 +373,7 @@ function MissionMinder:OnEnable()
     self:UpdateCharacterMetadata()
     self:UpdateMissions()
 
+    self:RegisterBucketEvent("CURRENCY_DISPLAY_UPDATE", 0.25, UpdateCurrency)
     self:RegisterEvent("PLAYER_LOGOUT", OnPlayerLogout)
     self:RegisterEvent("TIME_PLAYED_MSG", OnTimePlayedMsg)
 
